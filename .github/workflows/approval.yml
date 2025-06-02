@@ -1,0 +1,248 @@
+name: Strict Sequential Team Approval
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, submitted, review_requested]
+
+jobs:
+  check-sequential-approvals:
+    runs-on: arc
+    container: ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest
+    permissions:
+      pull-requests: write      # needed to comment and label
+      issues: write             # needed for labels
+    steps:
+      - run: echo "Runner is working"
+      - name: Validate sequential team approvals
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ACTIONS_PAT }} # Testing permissions using tokens.
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Define your ordered teams - REPLACE WITH YOUR ACTUAL SLUGS
+            const orderedTeams = [
+              { slug: 'ezp_test_team_1', approvedAt: null }, // NSD Approvers
+              { slug: 'ezp_test_team_2', approvedAt: null }, // Cyber Approvers
+              { slug: 'ezp_test_team_3', approvedAt: null }, // NSD Manager
+              // We would add more teams here as needed
+            ];
+
+            core.info(`Workflow triggered for PR #${prNumber} in ${owner}/${repo}.`);
+            core.info(`Sequential approval order: ${orderedTeams.map(t => `@${owner}/${t.slug}`).join(' → ')}`);
+            core.info(`Using PAT: ${!!process.env.INPUT_GITHUB_TOKEN}`); // Checks if a github-token was explicitly passed to the action
+
+            // Fetch all reviews for the PR
+            const reviewsResponse = await github.rest.pulls.listReviews({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            const reviews = reviewsResponse.data;
+            core.info(`Found ${reviews.length} review(s) on the PR.`);
+
+            const approvalMap = new Map(); // Stores teamSlug -> latestApprovalDate
+
+            core.info('Processing reviews to populate approvalMap...');
+            for (const review of reviews) {
+              if (review.state !== 'APPROVED') {
+                core.info(`Skipping review ID ${review.id} from ${review.user.login} (state: ${review.state}).`);
+                continue;
+              }
+              const userLogin = review.user.login;
+              const reviewTime = new Date(review.submitted_at);
+              core.info(`Found 'APPROVED' review ID ${review.id} from user '${userLogin}' submitted at ${reviewTime.toISOString()}.`);
+
+              for (const teamObj of orderedTeams) {
+                core.info(`  -> Checking membership of '${userLogin}' in team '${owner}/${teamObj.slug}'...`);
+                try {
+                  const membershipResponse = await github.rest.teams.getMembershipForUserInOrg({
+                    org: owner,
+                    team_slug: teamObj.slug,
+                    username: userLogin,
+                  });
+
+                  // Status 200: user is member and role is returned.
+                  // Status 204: user is member, no specific role (still counts as member).
+                  if (membershipResponse.status === 200 || membershipResponse.status === 204) {
+                    core.info(`    ✅ '${userLogin}' IS a member of '${owner}/${teamObj.slug}' (API Status: ${membershipResponse.status}).`);
+                    if (!approvalMap.has(teamObj.slug) || reviewTime > approvalMap.get(teamObj.slug)) {
+                      approvalMap.set(teamObj.slug, reviewTime);
+                      core.info(`      -> approvalMap updated for team '${teamObj.slug}' with approval time ${reviewTime.toISOString()}.`);
+                    } else {
+                      core.info(`      -> approvalMap already has an equal or newer approval for team '${teamObj.slug}'. No update needed for this review.`);
+                    }
+                  } else {
+                    // This case should ideally not be hit if API behaves as documented (non-200/204 should throw error)
+                    core.warning(`    ⚠️ Membership check for '${userLogin}' in '${owner}/${teamObj.slug}' returned unexpected API status: ${membershipResponse.status}.`);
+                  }
+                } catch (error) {
+                  // Common statuses:
+                  // error.status === 404: User is not a member of the team OR team_slug is invalid/not found OR org is wrong.
+                  // error.status === 403: PAT/Token lacks permissions for this specific check.
+                  core.warning(`    ❌ Error checking membership for '${userLogin}' in '${owner}/${teamObj.slug}'. Message: '${error.message}'. API Status: ${error.status || 'N/A'}.`);
+                }
+              }
+            }
+
+            core.info('--- Approval Map Status ---');
+            if (approvalMap.size === 0) {
+              core.info('  approvalMap is empty.');
+            } else {
+              for (const [teamSlug, approvedTime] of approvalMap) {
+                core.info(`  Team '${teamSlug}': Approved at ${approvedTime.toISOString()}`);
+              }
+            }
+
+            // Fill approval times in orderedTeams array
+            for (const team of orderedTeams) {
+              team.approvedAt = approvalMap.get(team.slug) || null;
+            }
+            core.info('--- Ordered Teams with Approval Status ---');
+            orderedTeams.forEach(t => core.info(`  Team: '@${owner}/${t.slug}', ApprovedAt: ${t.approvedAt ? t.approvedAt.toISOString() : 'null'}`));
+
+            // Enforce strict order and determine failure reason
+            let lastApprovalTime = null;
+            let failureReason = null;
+            const teamSlugsInOrder = orderedTeams.map(t => `@${owner}/${t.slug}`).join(' → ');
+
+            for (const team of orderedTeams) {
+              if (!team.approvedAt) {
+                failureReason = `❌ Missing approval from @${owner}/${team.slug}. Required order: ${teamSlugsInOrder}`;
+                core.info(`Setting failureReason: ${failureReason}`);
+                break;
+              }
+              if (lastApprovalTime && team.approvedAt < lastApprovalTime) {
+                failureReason = `❌ @${owner}/${team.slug} approved BEFORE a required previous team. Approval order is: ${teamSlugsInOrder}`;
+                core.info(`Setting failureReason: ${failureReason}`);
+                break;
+              }
+              lastApprovalTime = team.approvedAt;
+            }
+
+            // Determine the next team needing approval
+            const nextTeam = orderedTeams.find(t => !t.approvedAt);
+            if (nextTeam) {
+              core.info(`Next team pending approval: '@${owner}/${nextTeam.slug}'`);
+            } else if (!failureReason) { // Only if no prior failure (like out-of-order)
+              core.info('✅ All teams appear to be approved in the correct order!');
+            }
+
+
+            // === Auto-request review from the next pending team ===
+            let reviewRequestInfoMessage = "";
+            if (nextTeam) {
+              const currentRequestedTeamSlugs = context.payload.pull_request.requested_teams.map(t => t.slug);
+              core.info(`Current requested teams on PR: ${currentRequestedTeamSlugs.join(', ') || 'None'}`);
+              if (!currentRequestedTeamSlugs.includes(nextTeam.slug)) {
+                core.info(`Attempting to request review from '@${owner}/${nextTeam.slug}'.`);
+                try {
+                  await github.rest.pulls.requestReviewers({
+                    owner,
+                    repo,
+                    pull_number: prNumber,
+                    team_reviewers: [nextTeam.slug]
+                  });
+                  reviewRequestInfoMessage = `ℹ️ Automatically requested review from @${owner}/${nextTeam.slug}.`;
+                  core.info(reviewRequestInfoMessage);
+                } catch (error) {
+                  const errorMsg = `⚠️ Failed to request review from @${owner}/${nextTeam.slug}. Error: ${error.message} (Status: ${error.status || 'N/A'}).`;
+                  core.error(errorMsg);
+                  reviewRequestInfoMessage = errorMsg;
+                }
+              } else {
+                reviewRequestInfoMessage = `ℹ️ @${owner}/${nextTeam.slug} is already a requested reviewer.`;
+                core.info(reviewRequestInfoMessage);
+              }
+            }
+            // === END Auto-request review ===
+
+            // Label Logic (should be fine, assuming core logic above is fixed)
+            const targetLabel = nextTeam ? `Pending ${nextTeam.slug}` : 'Ready to Merge';
+            const allPossibleStatusLabels = orderedTeams.map(t => `Pending ${t.slug}`).concat(['Ready to Merge']);
+            const currentLabelsOnIssue = (await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber })).data.map(l => l.name);
+            core.info(`Target label: '${targetLabel}'. Current labels on issue: ${currentLabelsOnIssue.join(', ') || 'None'}`);
+
+            for (const labelNameToRemove of allPossibleStatusLabels) {
+              if (labelNameToRemove !== targetLabel && currentLabelsOnIssue.includes(labelNameToRemove)) {
+                core.info(`Attempting to remove label: '${labelNameToRemove}'`);
+                try {
+                  await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: labelNameToRemove });
+                } catch (error) {
+                  core.warning(`Could not remove label '${labelNameToRemove}': ${error.message}`);
+                }
+              }
+            }
+            if (!currentLabelsOnIssue.includes(targetLabel)) {
+              core.info(`Attempting to add label: '${targetLabel}'`);
+              try {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  labels: [targetLabel]
+                });
+              } catch (error) {
+                core.warning(`Could not add label '${targetLabel}': ${error.message}`);
+              }
+            }
+
+            // Construct PR Comment Body
+            const approvalStatusLines = orderedTeams.map(t => {
+              let status = t.approvedAt ? '✅' : '❌';
+              let detail = `@${owner}/${t.slug}`;
+              if (t.approvedAt) {
+                detail += ` (Approved: ${t.approvedAt.toUTCString()})`;
+              }
+              return `${status} ${detail}`;
+            });
+            const approvalStatusBody = approvalStatusLines.join('\n');
+
+            let finalCommentBody = `### Team Approval Status (Sequential Required)\n${approvalStatusBody}\n\n`;
+            if (failureReason) {
+              finalCommentBody += `${failureReason}`;
+            } else {
+              finalCommentBody += '✅ All teams approved in correct order. Ready to merge!';
+            }
+            if (reviewRequestInfoMessage && reviewRequestInfoMessage.startsWith('⚠️')) { // Only add prominent error messages for review requests
+              finalCommentBody += `\n\n${reviewRequestInfoMessage}`;
+            } else if (nextTeam && reviewRequestInfoMessage.startsWith('ℹ️ Automatically requested review')) { // Add success review request message if a team is pending
+                finalCommentBody += `\n\n${reviewRequestInfoMessage}`;
+            }
+
+
+            const botCommentSignature = "### Team Approval Status (Sequential Required)";
+            const existingComments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: prNumber,
+            });
+            const botComment = existingComments.data.find(comment =>
+              comment.user && comment.user.login === 'github-actions[bot]' && comment.body.startsWith(botCommentSignature)
+            );
+
+            core.info('Updating PR comment.');
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: botComment.id,
+                body: finalCommentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: finalCommentBody,
+              });
+            }
+
+            // Finally, set the action status
+            if (failureReason) {
+              core.setFailed(failureReason);
+            } else {
+              core.info('Workflow completed successfully. All approvals in order.');
+            }
