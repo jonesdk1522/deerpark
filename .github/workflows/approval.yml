@@ -1,19 +1,22 @@
 # ================================================================================
 # Strict Sequential Team Approval Workflow
 # ================================================================================
-# Purpose: Enforces sequential team approvals on pull requests in a specific order.
-#          Teams must approve in the defined sequence before the PR can be merged.
+# Purpose: Enforces sequential team approvals on pull requests in a specific 
+#          order. Teams must approve in the defined sequence before the PR can 
+#          be merged.
 #
 # Configuration:
 #   - runner: Specify the runner type (default: 'arc')
 #   - container: Container image to use (default: ECP production UBI9 image)
-#   - team_slugs: Comma-separated ordered list of team slugs for approval sequence
-#   - use_pat: Whether to use a privileged PAT instead of GITHUB_TOKEN (default: false)
+#   - team_slugs: Comma-separated ordered list of team slugs for approval 
+#                 sequence
+#   - use_pat: Whether to use a privileged PAT instead of GITHUB_TOKEN 
+#              (default: false)
 #
 # Usage:
-#   This workflow automatically triggers on PR events and validates the approval
-#   sequence. It will comment on the PR with current status, request reviews from
-#   the next team in sequence, and apply appropriate labels.
+#   This workflow automatically triggers on PR events and validates the 
+#   approval sequence. It will comment on the PR with current status, request 
+#   reviews from the next team in sequence, and apply appropriate labels.
 #
 # Dependencies:
 #   - Teams must exist in the organization
@@ -23,7 +26,7 @@
 
 name: Strict Sequential Team Approval
 
-on:
+'on':
   pull_request:
     types: [opened, edited, reopened, synchronize, review_requested, submitted]
   workflow_dispatch:
@@ -52,7 +55,9 @@ on:
 jobs:
   check-sequential-approvals:
     runs-on: ${{ inputs.runner || 'arc' }}
-    container: ${{ inputs.container || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest' }}
+    container: >-
+      ${{ inputs.container || 
+          'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest' }}
     permissions:
       pull-requests: write      # needed to comment, label, and request reviews
       contents: read            # needed to access repository content
@@ -61,7 +66,9 @@ jobs:
       - name: Validate sequential team approvals
         uses: actions/github-script@v7
         with:
-          github-token: ${{ inputs.use_pat == true && secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+          github-token: >-
+            ${{ inputs.use_pat == true && secrets.ACTIONS_PAT || 
+                secrets.GITHUB_TOKEN }}
           script: |
             // ================================================================================
             // CONFIGURATION AND SETUP
@@ -72,14 +79,18 @@ jobs:
             const repo = context.repo.repo;
             
             // Parse team slugs from input or use defaults
-            const teamSlugsInput = '${{ inputs.team_slugs || 'ezp_test_team_1,ezp_test_team_2,ezp_test_team_3' }}';
-            const teamSlugs = teamSlugsInput.split(',').map(slug => slug.trim()).filter(slug => slug.length > 0);
-            
+            const teamSlugsInput = '${{ inputs.team_slugs || 
+              "ezp_test_team_1,ezp_test_team_2,ezp_test_team_3" }}';
+            const teamSlugs = teamSlugsInput.split(',')
+              .map(slug => slug.trim()).filter(slug => slug.length > 0);
+
             const orderedTeams = teamSlugs.map(slug => ({ slug, approvedAt: null }));
             
             core.info(`Workflow triggered for PR #${prNumber} in ${owner}/${repo}.`);
-            core.info(`Sequential approval order: ${orderedTeams.map(t => `@${owner}/${t.slug}`).join(' → ')}`);
-            core.info(`Using ${{ inputs.use_pat == true && 'PAT' || 'GITHUB_TOKEN' }} for authentication`);
+            core.info(`Sequential approval order: ${orderedTeams
+              .map(t => `@${owner}/${t.slug}`).join(' → ')}`);
+            core.info(`Using ${{ inputs.use_pat == true && 'PAT' || 
+              'GITHUB_TOKEN' }} for authentication`);
             
             // ================================================================================
             // HELPER FUNCTIONS
