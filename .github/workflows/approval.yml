@@ -417,52 +417,45 @@ jobs:
             const teamApprovers = new Map();
             const usedApprovers = new Set(); // Track users who have already approved
             
-            for (const [userLogin, review] of userLatestReviews) {
-              if (review.state !== 'APPROVED') {
-                core.info(`User ${userLogin}'s latest review is ${review.state}, skipping`);
-                continue;
-              }
+            // Process approvals in sequential order by team
+            for (const team of orderedTeams) {
+              core.info(`Processing approvals for team: ${team.slug} (${team.name})`);
               
-              // Skip if this user has already been used for an approval
-              if (usedApprovers.has(userLogin)) {
-                core.info(`User ${userLogin} has already provided approval for another team, skipping`);
-                continue;
-              }
-              
-              const reviewTime = new Date(review.submitted_at);
-              core.info(`Processing approval from ${userLogin} at ${reviewTime.toISOString()}`);
-              
-              // Check team membership
-              const membershipChecks = orderedTeams.map(async (team) => {
+              // Find approvers for this specific team who haven't been used yet
+              for (const [userLogin, review] of userLatestReviews) {
+                if (review.state !== 'APPROVED') {
+                  continue;
+                }
+                
+                // Skip if this user has already been used for a previous team
+                if (usedApprovers.has(userLogin)) {
+                  continue;
+                }
+                
+                // Skip if this team already has an approval
+                if (approvalMap.has(team.slug)) {
+                  break;
+                }
+                
+                const reviewTime = new Date(review.submitted_at);
+                
+                // Check if this user is a member of the current team
                 const isMember = await checkTeamMembership(userLogin, team.slug);
                 if (isMember) {
-                  return { team: team.slug, time: reviewTime, user: userLogin };
-                }
-                return null;
-              });
-              
-              const results = await Promise.all(membershipChecks);
-              
-              // Find the earliest team in sequence that this user can approve for
-              let userAppliedToTeam = false;
-              for (const team of orderedTeams) {
-                const teamResult = results.find(r => r && r.team === team.slug);
-                if (teamResult && !approvalMap.has(team.slug)) {
-                  // Apply this user's approval to the first eligible team in sequence
-                  approvalMap.set(team.slug, teamResult.time);
+                  // Apply this user's approval to this specific team
+                  approvalMap.set(team.slug, reviewTime);
                   if (!teamApprovers.has(team.slug)) {
                     teamApprovers.set(team.slug, []);
                   }
-                  teamApprovers.get(team.slug).push(teamResult.user);
+                  teamApprovers.get(team.slug).push(userLogin);
                   usedApprovers.add(userLogin); // Mark this user as used
-                  userAppliedToTeam = true;
-                  core.info(`Applied approval from ${userLogin} to team ${team.slug} (first eligible team in sequence)`);
-                  break; // Stop after applying to first eligible team
+                  core.info(`✅ Applied approval from ${userLogin} to team ${team.slug} at ${reviewTime.toISOString()}`);
+                  break; // Move to next team once this team has an approval
                 }
               }
               
-              if (!userAppliedToTeam) {
-                core.info(`User ${userLogin} is not a member of any required teams or all their teams already have approvals`);
+              if (!approvalMap.has(team.slug)) {
+                core.info(`❌ No unused approvers found for team ${team.slug}`);
               }
             }
 
@@ -642,7 +635,7 @@ jobs:
               }).join('\n');              let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
               
               // Add note about unique approvers
-              commentBody += `> **Note:** Each person can only approve once, even if they are members of multiple teams. Approvals are applied to the first eligible team in the sequence.\n\n`;
+              commentBody += `> **Note:** Each team requires approval from a **different person**. Once someone approves for one team, they cannot approve for subsequent teams, ensuring true sequential team approval with unique approvers.\n\n`;
               
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
@@ -679,9 +672,8 @@ jobs:
                   reminderBody += `Expected response time: ${slaViolation.slaHours} hours\n\n`;
                 } else if (reminderNeeded) {
                   reminderBody += `This PR is waiting for approval from **${nextTeam.name}** (@${owner}/${nextTeam.slug}).\n\n`;                }
-                
-                reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
-                reminderBody += `> **Note:** Each person can only approve once, even if they are members of multiple teams.\n\n`;
+                  reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
+                reminderBody += `> **Note:** Each team requires approval from a different person. Once someone approves for one team, they cannot approve for subsequent teams.\n\n`;
                 reminderBody += `---\n<sub>Automated reminder sent at ${new Date().toLocaleString()} UTC</sub>`;
                 
                 try {
