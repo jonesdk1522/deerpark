@@ -615,8 +615,7 @@ jobs:
               }
             }
 
-            // Post comment
-            let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
+            // Post comment            
             if (config.options.postComments) {
               const approvalStatus = orderedTeams.map((t, index) => {
                 const status = t.approvedAt ? '✅' : (failureReason?.startsWith('❌') && t.approvedAt ? '⚠️' : '⏳');
@@ -628,6 +627,8 @@ jobs:
                 return `${detail}\n   - ${t.description}`;
               }).join('\n');
 
+              let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
+              
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
               } else if (allTeamsApproved) {
@@ -731,7 +732,8 @@ jobs:
                     title: allTeamsApproved ? 'All teams approved ✅' : 
                            failureReason?.startsWith('❌') ? 'Approval order violation ❌' :
                            `Waiting for ${nextTeam?.name || 'approval'}`,
-                    summary: `### Approval Status\n\n${commentBody}`
+                    summary: `### Approval Status\n\n${allTeamsApproved ? '✅ All teams approbed!' :
+                    nextTeam ? ('⌛ Waiting for ' + nextTeam.name) : 'Checking approvals...'}`
                   }
                 });
               } catch (error) {
