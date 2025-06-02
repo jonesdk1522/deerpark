@@ -124,7 +124,7 @@ jobs:
       checks: write
     strategy:
       matrix:
-        pr_number: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.check_all_prs == 'true') ? fromJSON(needs.identify-prs.outputs.pr_numbers || '[]') : fromJSON(format('[{0}]', github.event.pull_request.number || github.event.inputs.pr_number || '0')) }}
+        pr_number: ${{ fromJSON(needs.identify-prs.outputs.pr_numbers || format('[{0}]', github.event.pull_request.number || github.event.inputs.pr_number || '0')) }}
       max-parallel: 5
       fail-fast: false
     steps:
@@ -723,13 +723,12 @@ jobs:
                   name: 'Sequential Approval Status',
                   head_sha: pr.data.head.sha,
                   status: 'completed',
-                  conclusion: failureReason?.startsWith('❌') ? 'failure' : 
-                             allTeamsApproved ? 'success' : 'neutral',
+                  conclusion: failureReason?.startsWith('❌') ? 'failure' : currentTeamIndex > teamCount ? 'success' : 'neutral',
                   output: {
                     title: allTeamsApproved ? 'All teams approved ✅' : 
                            failureReason?.startsWith('❌') ? 'Approval order violation ❌' :
                            `Waiting for ${nextTeam?.name || 'approval'}`,
-                    summary: `### Approval Status\n\n${approvalStatus}`
+                    summary: `### Approval Status\n\n${comment}`
                   }
                 });
               } catch (error) {
