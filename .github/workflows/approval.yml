@@ -16,7 +16,7 @@ jobs:
       - name: Validate sequential team approvals
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.ACTIONS_PAT }} # Testing permissions using tokens.
+          github-token: ${{ secrets.ACTIONS_PAT }} # Testing permissions using tokens. This needs to be an OR.
           script: |
             const prNumber = context.payload.pull_request.number;
             const owner = context.repo.owner;
