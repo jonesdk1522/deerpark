@@ -616,6 +616,7 @@ jobs:
             }
 
             // Post comment
+            let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
             if (config.options.postComments) {
               const approvalStatus = orderedTeams.map((t, index) => {
                 const status = t.approvedAt ? '✅' : (failureReason?.startsWith('❌') && t.approvedAt ? '⚠️' : '⏳');
@@ -627,8 +628,6 @@ jobs:
                 return `${detail}\n   - ${t.description}`;
               }).join('\n');
 
-              let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
-              
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
               } else if (allTeamsApproved) {
