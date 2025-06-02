@@ -46,7 +46,7 @@ teams:
   - slug: frontend-team      # GitHub team slug (required)
     name: Frontend Team      # Display name
     description: UI review   # Optional description
-    slaHours: 24            # Response time SLA
+    slaHours: 24             # Response time SLA
 ```
 
 ### Finding Team Slugs
