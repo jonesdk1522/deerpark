@@ -51,9 +51,9 @@ teams:
 
 ### Finding Team Slugs
 
-1. Go to https://github.com/orgs/YOUR_ORG/teams
+1. Go to https://github.enterprise.irs.gov/orgs/YOUR_ORG/teams
 2. Click on a team
-3. The URL will be: `github.com/orgs/YOUR_ORG/teams/TEAM_SLUG`
+3. The URL will be: `github.enterprise.irs.gov/orgs/YOUR_ORG/teams/TEAM_SLUG`
 4. Use the `TEAM_SLUG` part in your configuration
 
 ### Options
@@ -62,7 +62,7 @@ All options and their defaults:
 
 ```yaml
 options:
-  autoRequestReview: true      # Auto-request next team
+  autoRequestReview: true     # Auto-request next team
   updateLabels: true          # Manage PR labels
   postComments: true          # Post status comments
   requireAllTeams: true       # Require all teams
@@ -70,7 +70,7 @@ options:
   enableSLATracking: true     # Track SLAs
   sendReminders: true         # Send reminders
   reminderIntervalHours: 24   # Reminder frequency
-  skipDraftPRs: true         # Skip draft PRs
+  skipDraftPRs: true          # Skip draft PRs
 ```
 
 ## Labels Created
