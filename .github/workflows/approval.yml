@@ -6,8 +6,8 @@ on:
 
 jobs:
   check-sequential-approvals:
-    runs-on: arc
-    container: ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest
+    runs-on: arc #This needs to be an OR.
+    container: ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest # This needs to be conditional based on what is selcted in the runs-on block.
     permissions:
       pull-requests: write      # needed to comment and label
       issues: write             # needed for labels
