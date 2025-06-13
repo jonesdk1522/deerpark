@@ -91,7 +91,7 @@ jobs:
         id: get_prs
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN || secrets.ACTIONS_PAT }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
@@ -412,50 +412,43 @@ jobs:
                   reviewTime > new Date(userLatestReviews.get(userLogin).submitted_at)) {
                 userLatestReviews.set(userLogin, review);
               }
-            }            // Check approvals
+            }
+
+            // Check approvals
             const approvalMap = new Map();
             const teamApprovers = new Map();
-            const usedApprovers = new Set(); // Track users who have already approved
             
-            // Process approvals in sequential order by team
-            for (const team of orderedTeams) {
-              core.info(`Processing approvals for team: ${team.slug} (${team.name})`);
-              
-              // Find approvers for this specific team who haven't been used yet
-              for (const [userLogin, review] of userLatestReviews) {
-                if (review.state !== 'APPROVED') {
-                  continue;
-                }
-                
-                // Skip if this user has already been used for a previous team
-                if (usedApprovers.has(userLogin)) {
-                  continue;
-                }
-                
-                // Skip if this team already has an approval
-                if (approvalMap.has(team.slug)) {
-                  break;
-                }
-                
-                const reviewTime = new Date(review.submitted_at);
-                
-                // Check if this user is a member of the current team
-                const isMember = await checkTeamMembership(userLogin, team.slug);
-                if (isMember) {
-                  // Apply this user's approval to this specific team
-                  approvalMap.set(team.slug, reviewTime);
-                  if (!teamApprovers.has(team.slug)) {
-                    teamApprovers.set(team.slug, []);
-                  }
-                  teamApprovers.get(team.slug).push(userLogin);
-                  usedApprovers.add(userLogin); // Mark this user as used
-                  core.info(`✅ Applied approval from ${userLogin} to team ${team.slug} at ${reviewTime.toISOString()}`);
-                  break; // Move to next team once this team has an approval
-                }
+            for (const [userLogin, review] of userLatestReviews) {
+              if (review.state !== 'APPROVED') {
+                core.info(`User ${userLogin}'s latest review is ${review.state}, skipping`);
+                continue;
               }
               
-              if (!approvalMap.has(team.slug)) {
-                core.info(`❌ No unused approvers found for team ${team.slug}`);
+              const reviewTime = new Date(review.submitted_at);
+              core.info(`Processing approval from ${userLogin} at ${reviewTime.toISOString()}`);
+              
+              // Check team membership
+              const membershipChecks = orderedTeams.map(async (team) => {
+                const isMember = await checkTeamMembership(userLogin, team.slug);
+                if (isMember) {
+                  return { team: team.slug, time: reviewTime, user: userLogin };
+                }
+                return null;
+              });
+              
+              const results = await Promise.all(membershipChecks);
+              
+              for (const result of results) {
+                if (result && (!approvalMap.has(result.team) || result.time > approvalMap.get(result.team))) {
+                  approvalMap.set(result.team, result.time);
+                  if (!teamApprovers.has(result.team)) {
+                    teamApprovers.set(result.team, []);
+                  }
+                  if (!teamApprovers.get(result.team).includes(result.user)) {
+                    teamApprovers.get(result.team).push(result.user);
+                  }
+                  core.info(`Updated approval for team ${result.team} by ${result.user}`);
+                }
               }
             }
 
@@ -632,10 +625,9 @@ jobs:
                   return `${detail}\n   - Approved: ${new Date(t.approvedAt).toLocaleString()} UTC\n   - Approver(s): @${approversList}`;
                 }
                 return `${detail}\n   - ${t.description}`;
-              }).join('\n');              let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
-              
-              // Add note about unique approvers
-              commentBody += `> **Note:** Each team requires approval from a **different person**. Once someone approves for one team, they cannot approve for subsequent teams, ensuring true sequential team approval with unique approvers.\n\n`;
+              }).join('\n');
+
+              let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
               
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
@@ -671,9 +663,10 @@ jobs:
                   reminderBody += `**${slaViolation.team.name}** (@${owner}/${slaViolation.team.slug}) is **${slaViolation.hoursOverdue} hours overdue** for approval.\n`;
                   reminderBody += `Expected response time: ${slaViolation.slaHours} hours\n\n`;
                 } else if (reminderNeeded) {
-                  reminderBody += `This PR is waiting for approval from **${nextTeam.name}** (@${owner}/${nextTeam.slug}).\n\n`;                }
-                  reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
-                reminderBody += `> **Note:** Each team requires approval from a different person. Once someone approves for one team, they cannot approve for subsequent teams.\n\n`;
+                  reminderBody += `This PR is waiting for approval from **${nextTeam.name}** (@${owner}/${nextTeam.slug}).\n\n`;
+                }
+                
+                reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
                 reminderBody += `---\n<sub>Automated reminder sent at ${new Date().toLocaleString()} UTC</sub>`;
                 
                 try {
