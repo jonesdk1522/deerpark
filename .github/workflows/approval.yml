@@ -114,8 +114,9 @@ jobs:
 
   check-sequential-approvals-single:
     if: github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || github.event.inputs.check_all_prs != 'true')
-    runs-on: ${{ fromJSON(format('["ubuntu-latest", "{0}"]', vars.SELF_HOSTED_RUNNER || 'arc'))[fromJSON(vars.USE_SELF_HOSTED || 'true') && 1 || 0] }}
-    container: ${{ fromJSON(vars.USE_SELF_HOSTED || 'true') && (vars.CONTAINER_IMAGE || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest') || '' }}
+    runs-on: ubi9
+    #runs-on: ${{ fromJSON(format('["ubuntu-latest", "{0}"]', vars.SELF_HOSTED_RUNNER || 'arc'))[fromJSON(vars.USE_SELF_HOSTED || 'true') && 1 || 0] }}
+    #container: ${{ fromJSON(vars.USE_SELF_HOSTED || 'true') && (vars.CONTAINER_IMAGE || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest') || '' }}
     permissions:
       pull-requests: write
       issues: write
@@ -139,27 +140,45 @@ jobs:
             const labelPrefixes = ['Pending:', 'SLA Overdue:', 'Ready to Merge'];
             const issueLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
             for (const label of issueLabels.data) {
-              if (labelPrefixes.some(prefix => label.name.startsWith(prefix))) {
+                if (labelPrefixes.some(prefix => label.name.startsWith(prefix))) {
                 try {
-                  await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label.name });
+                    await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label.name });
                 } catch {}
-              }
+                }
             }
 
             // Remove the status comment if it exists
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number: prNumber });
             for (const comment of comments.data) {
-              if (comment.user?.type === 'Bot' && comment.body?.includes('Sequential Team Approval Status')) {
+                if (comment.user?.type === 'Bot' && comment.body?.includes('Sequential Team Approval Status')) {
                 await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
-              }
+                }
+            }
+
+            // Dismiss all APPROVED reviews on the current PR
+            const reviews = await github.rest.pulls.listViews({ owner, repo, pull_number: prNumber });
+            for (const review of reviews.data) {
+                if (review.state === 'APPROVED') {
+                    try {
+                        await github.rest.pulls.dismissReview({
+                            owner,
+                            repo,
+                            pull_number: prNumber,
+                            review_id: review.id,
+                            message: '🔃 Approval reset due to new commit.'
+                        });
+                    } catch (e) {
+                        console.error(e);
+                    }
+                }
             }
 
             // Notify PR participants
             await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number: prNumber,
-              body: '⚠️ New commit detected. All prior approvals have been reset. Approval workflow will start from the first team.'
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: '⚠️ New commit detected. All prior approvals have been reset. Approval workflow will start from the first team.'
             })
       - name: Skip if no PR number
         if: ${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }}
@@ -802,8 +821,9 @@ jobs:
   check-sequential-approvals:
     needs: [identify-prs]
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.check_all_prs == 'true')
-    runs-on: ${{ fromJSON(format('["ubuntu-latest", "{0}"]', vars.SELF_HOSTED_RUNNER || 'arc'))[fromJSON(vars.USE_SELF_HOSTED || 'true') && 1 || 0] }}
-    container: ${{ fromJSON(vars.USE_SELF_HOSTED || 'true') && (vars.CONTAINER_IMAGE || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest') || '' }}
+    runs-on: ubi9
+    # runs-on: ${{ fromJSON(format('["ubuntu-latest", "{0}"]', vars.SELF_HOSTED_RUNNER || 'arc'))[fromJSON(vars.USE_SELF_HOSTED || 'true') && 1 || 0] }}
+    # container: ${{ fromJSON(vars.USE_SELF_HOSTED || 'true') && (vars.CONTAINER_IMAGE || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest') || '' }}
     permissions:
       pull-requests: write
       issues: write
