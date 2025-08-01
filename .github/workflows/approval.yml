@@ -181,7 +181,7 @@ jobs:
                 body: '⚠️ New commit detected. All prior approvals have been reset. Approval workflow will start from the first team.'
             })
       - name: Skip if no PR number
-        if: ${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }}
+        if: ${{ !(github.event.pull_request.number || github.event.inputs.pr_number) }}
         run: |
           echo "No PR number provided, skipping"
           exit 0
@@ -853,7 +853,7 @@ jobs:
 
 
 
-    check-sequential-approvals:
+  check-sequential-approvals:
     needs: [identify-prs]
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.check_all_prs == 'true')
     runs-on: ubi9
@@ -905,7 +905,7 @@ jobs:
               repo,
               issue_number: prNumber,
               body: '⚠️ New commit detected. All prior approvals have been reset. Approval workflow will start from the first team.'
-            })
+            });
       - name: Skip if no PR number
         if: matrix.pr_number == 0
         run: |
