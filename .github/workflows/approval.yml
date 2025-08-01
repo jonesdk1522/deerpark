@@ -1,5 +1,5 @@
 name: Strict Sequential Team Approval
-
+ 
 on:
   pull_request:
     types: [opened, edited, reopened, synchronize]
@@ -21,47 +21,47 @@ on:
         required: false
         type: boolean
         default: false
-
+ 
 env:
   # Runner configuration
   USE_SELF_HOSTED: ${{ vars.USE_SELF_HOSTED || 'true' }}
   SELF_HOSTED_RUNNER: ${{ vars.SELF_HOSTED_RUNNER || 'arc' }}
   DEFAULT_RUNNER: ${{ vars.DEFAULT_RUNNER || 'ubuntu-latest' }}
   CONTAINER_IMAGE: ${{ vars.CONTAINER_IMAGE || 'ecp-prod.nexus-ecp.web.irs.gov/arc/ubi9:latest' }}
-  
+ 
   # Team configuration from variables
   TEAM_COUNT: ${{ vars.TEAM_COUNT || '3' }}
-  
+ 
   # Team 1
   TEAM_1_SLUG: ${{ vars.TEAM_1_SLUG }}
   TEAM_1_NAME: ${{ vars.TEAM_1_NAME || 'Team 1' }}
   TEAM_1_DESCRIPTION: ${{ vars.TEAM_1_DESCRIPTION || 'First approval' }}
   TEAM_1_SLA_HOURS: ${{ vars.TEAM_1_SLA_HOURS || '24' }}
-  
+ 
   # Team 2
   TEAM_2_SLUG: ${{ vars.TEAM_2_SLUG }}
   TEAM_2_NAME: ${{ vars.TEAM_2_NAME || 'Team 2' }}
   TEAM_2_DESCRIPTION: ${{ vars.TEAM_2_DESCRIPTION || 'Second approval' }}
   TEAM_2_SLA_HOURS: ${{ vars.TEAM_2_SLA_HOURS || '48' }}
-  
+ 
   # Team 3
   TEAM_3_SLUG: ${{ vars.TEAM_3_SLUG }}
   TEAM_3_NAME: ${{ vars.TEAM_3_NAME || 'Team 3' }}
   TEAM_3_DESCRIPTION: ${{ vars.TEAM_3_DESCRIPTION || 'Third approval' }}
   TEAM_3_SLA_HOURS: ${{ vars.TEAM_3_SLA_HOURS || '72' }}
-  
+ 
   # Team 4 (optional)
   TEAM_4_SLUG: ${{ vars.TEAM_4_SLUG || '' }}
   TEAM_4_NAME: ${{ vars.TEAM_4_NAME || 'Team 4' }}
   TEAM_4_DESCRIPTION: ${{ vars.TEAM_4_DESCRIPTION || 'Fourth approval' }}
   TEAM_4_SLA_HOURS: ${{ vars.TEAM_4_SLA_HOURS || '96' }}
-  
+ 
   # Team 5 (optional)
   TEAM_5_SLUG: ${{ vars.TEAM_5_SLUG || '' }}
   TEAM_5_NAME: ${{ vars.TEAM_5_NAME || 'Team 5' }}
   TEAM_5_DESCRIPTION: ${{ vars.TEAM_5_DESCRIPTION || 'Fifth approval' }}
   TEAM_5_SLA_HOURS: ${{ vars.TEAM_5_SLA_HOURS || '120' }}
-  
+ 
   # Workflow options
   AUTO_REQUEST_REVIEW: ${{ vars.AUTO_REQUEST_REVIEW || 'true' }}
   UPDATE_LABELS: ${{ vars.UPDATE_LABELS || 'true' }}
@@ -72,13 +72,13 @@ env:
   SEND_REMINDERS: ${{ vars.SEND_REMINDERS || 'true' }}
   REMINDER_INTERVAL_HOURS: ${{ vars.REMINDER_INTERVAL_HOURS || '24' }}
   SKIP_DRAFT_PRS: ${{ vars.SKIP_DRAFT_PRS || 'true' }}
-  
+ 
   # Label colors
   LABEL_COLOR_PENDING: ${{ vars.LABEL_COLOR_PENDING || 'fbca04' }}
   LABEL_COLOR_READY: ${{ vars.LABEL_COLOR_READY || '0e8a16' }}
   LABEL_COLOR_BLOCKED: ${{ vars.LABEL_COLOR_BLOCKED || 'd73a4a' }}
   LABEL_COLOR_OVERDUE: ${{ vars.LABEL_COLOR_OVERDUE || 'b60205' }}
-
+ 
 jobs:
   # Job to handle scheduled runs
   identify-prs:
@@ -95,20 +95,20 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            
+           
             core.info(`Fetching open PRs for ${owner}/${repo}...`);
-            
+           
             const prs = await github.paginate(github.rest.pulls.list, {
               owner,
               repo,
               state: 'open',
               per_page: 100
             });
-            
+           
             const skipDrafts = '${{ env.SKIP_DRAFT_PRS }}' === 'true';
             const filteredPRs = skipDrafts ? prs.filter(pr => !pr.draft) : prs;
             const prNumbers = filteredPRs.map(pr => pr.number);
-            
+           
             core.info(`Found ${prs.length} open PRs (${filteredPRs.length} non-draft)`);
             core.setOutput('pr_numbers', JSON.stringify(prNumbers));
 
@@ -135,7 +135,7 @@ jobs:
             const prNumber = parseInt('${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }}');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-
+ 
             // Remove approval/ready/SLA labels
             const labelPrefixes = ['Pending:', 'SLA Overdue:', 'Ready to Merge'];
             const issueLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
@@ -146,7 +146,7 @@ jobs:
                 } catch {}
                 }
             }
-
+ 
             // Remove the status comment if it exists
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number: prNumber });
             for (const comment of comments.data) {
@@ -154,9 +154,9 @@ jobs:
                 await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
                 }
             }
-
+ 
             // Dismiss all APPROVED reviews on the current PR
-            const reviews = await github.rest.pulls.listViews({ owner, repo, pull_number: prNumber });
+            const reviews = await github.rest.pulls.listReviews({ owner, repo, pull_number: prNumber });
             for (const review of reviews.data) {
                 if (review.state === 'APPROVED') {
                     try {
@@ -172,7 +172,7 @@ jobs:
                     }
                 }
             }
-
+ 
             // Notify PR participants
             await github.rest.issues.createComment({
                 owner,
@@ -185,7 +185,7 @@ jobs:
         run: |
           echo "No PR number provided, skipping"
           exit 0
-
+ 
       - name: Build configuration from variables
         id: config
         uses: actions/github-script@v7
@@ -194,7 +194,7 @@ jobs:
             // Build teams array from environment variables
             const teams = [];
             const teamCount = parseInt('${{ env.TEAM_COUNT }}');
-            
+           
             for (let i = 1; i <= 5; i++) {
               const slug = process.env[`TEAM_${i}_SLUG`];
               if (slug && i <= teamCount) {
@@ -206,12 +206,12 @@ jobs:
                 });
               }
             }
-            
+           
             if (teams.length === 0) {
               core.setFailed('No teams configured. Please set TEAM_1_SLUG variable at minimum.');
               return;
             }
-            
+           
             // Build configuration object
             const config = {
               teams: teams,
@@ -233,22 +233,22 @@ jobs:
                 overdue: '${{ env.LABEL_COLOR_OVERDUE }}'
               }
             };
-            
+           
             core.info(`Configuration loaded with ${teams.length} teams:`);
             teams.forEach((team, index) => {
               core.info(`  ${index + 1}. ${team.name} (@${team.slug}) - SLA: ${team.slaHours}h`);
             });
-            
+           
             core.setOutput('config', JSON.stringify(config));
             core.setOutput('team_count', teams.length);
-
+ 
       - name: Determine PR number
         id: pr
         uses: actions/github-script@v7
         with:
           script: |
             let prNumber = ${{ github.event.pull_request.number || github.event.inputs.pr_number || 0 }};
-            
+           
             if (!prNumber && context.eventName !== 'schedule') {
               if (context.eventName === 'pull_request' || context.eventName === 'pull_request_target') {
                 prNumber = context.payload.pull_request.number;
@@ -258,15 +258,15 @@ jobs:
                 prNumber = context.payload.inputs?.pr_number || null;
               }
             }
-            
+           
             if (!prNumber) {
               core.setFailed('Could not determine PR number from event context');
               return;
             }
-            
+           
             core.setOutput('number', prNumber);
             core.info(`Processing PR #${prNumber}`);
-
+ 
       - name: Ensure labels exist
         if: success()
         uses: actions/github-script@v7
@@ -276,12 +276,12 @@ jobs:
             const config = JSON.parse('${{ steps.config.outputs.config }}');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            
+           
             if (!config.options.createLabelsIfMissing) {
               core.info('Label creation is disabled');
               return;
             }
-            
+           
             // Define all labels we need
             const requiredLabels = [
               ...config.teams.map(t => ({
@@ -295,7 +295,7 @@ jobs:
                 color: config.labelColors.ready
               }
             ];
-            
+           
             // Add SLA labels if enabled
             if (config.options.enableSLATracking) {
               config.teams.forEach(t => {
@@ -306,7 +306,7 @@ jobs:
                 });
               });
             }
-            
+           
             // Get existing labels
             let existingLabels = [];
             try {
@@ -319,7 +319,7 @@ jobs:
             } catch (error) {
               core.warning(`Failed to fetch existing labels: ${error.message}`);
             }
-            
+           
             // Create missing labels
             let createdCount = 0;
             for (const label of requiredLabels) {
@@ -343,11 +343,11 @@ jobs:
                 }
               }
             }
-            
+           
             if (createdCount > 0) {
               core.info(`Created ${createdCount} new labels`);
             }
-
+ 
       - name: Validate sequential team approvals
         if: success()
         uses: actions/github-script@v7
@@ -359,10 +359,10 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const isScheduledRun = context.eventName === 'schedule';
-
+ 
             // Helper functions
             const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-            
+           
             const retryWithBackoff = async (fn, maxRetries = 3, initialDelay = 1000) => {
               for (let i = 0; i < maxRetries; i++) {
                 try {
@@ -375,10 +375,10 @@ jobs:
                 }
               }
             };
-
+ 
             const checkTeamMembership = async (username, teamSlug) => {
               try {
-                const response = await retryWithBackoff(async () => 
+                const response = await retryWithBackoff(async () =>
                   github.rest.teams.getMembershipForUserInOrg({
                     org: owner,
                     team_slug: teamSlug,
@@ -394,11 +394,11 @@ jobs:
                 return false;
               }
             };
-
+ 
             // Main logic
             const orderedTeams = config.teams.map(t => ({ ...t, approvedAt: null, approvers: [] }));
             core.info(`Checking PR #${prNumber} against ${orderedTeams.length} required approvals`);
-            
+           
             // Fetch PR details
             let pr;
             try {
@@ -415,18 +415,18 @@ jobs:
               core.setFailed(`Failed to fetch PR details: ${error.message}`);
               return;
             }
-
+ 
             // Skip if PR is draft and configured to skip
             if (pr.data.draft && config.options.skipDraftPRs) {
               core.info(`PR #${prNumber} is a draft, skipping approval checks`);
               return;
             }
-
+ 
             // Fetch all reviews
             let allReviews = [];
             let page = 1;
             const perPage = 100;
-            
+           
             try {
               while (true) {
                 const reviewsResponse = await retryWithBackoff(async () =>
@@ -438,9 +438,9 @@ jobs:
                     page: page
                   })
                 );
-                
+               
                 allReviews = allReviews.concat(reviewsResponse.data);
-                
+               
                 if (reviewsResponse.data.length < perPage) {
                   break;
                 }
@@ -450,81 +450,55 @@ jobs:
               core.setFailed(`Failed to fetch PR reviews: ${error.message}`);
               return;
             }
-
+ 
             core.info(`Found ${allReviews.length} total review(s) on the PR`);
-
+ 
             // Process reviews - get latest from each user
             const userLatestReviews = new Map();
-            
+           
             for (const review of allReviews) {
               const userLogin = review.user.login;
               const reviewTime = new Date(review.submitted_at);
-              
-              if (!userLatestReviews.has(userLogin) || 
+             
+              if (!userLatestReviews.has(userLogin) ||
                   reviewTime > new Date(userLatestReviews.get(userLogin).submitted_at)) {
                 userLatestReviews.set(userLogin, review);
               }
             }
-
+ 
             // Check approvals
-            const approvalMap = new Map();
-            const teamApprovers = new Map();
-            
-            for (const [userLogin, review] of userLatestReviews) {
-              if (review.state !== 'APPROVED') {
-                core.info(`User ${userLogin}'s latest review is ${review.state}, skipping`);
-                continue;
-              }
-              
-              const reviewTime = new Date(review.submitted_at);
-              core.info(`Processing approval from ${userLogin} at ${reviewTime.toISOString()}`);
-              
-              // Check team membership
-              const membershipChecks = orderedTeams.map(async (team) => {
+            const usedApprovers = new Set();
+ 
+            for (const team of orderedTeams) {
+              for (const [userLogin, review] of userLatestReviews) {
+                if (usedApprovers.has(userLogin)) continue;
+                if (review.state !== 'APPROVED') continue;
                 const isMember = await checkTeamMembership(userLogin, team.slug);
                 if (isMember) {
-                  return { team: team.slug, time: reviewTime, user: userLogin };
-                }
-                return null;
-              });
-              
-              const results = await Promise.all(membershipChecks);
-              
-              for (const result of results) {
-                if (result && (!approvalMap.has(result.team) || result.time > approvalMap.get(result.team))) {
-                  approvalMap.set(result.team, result.time);
-                  if (!teamApprovers.has(result.team)) {
-                    teamApprovers.set(result.team, []);
-                  }
-                  if (!teamApprovers.get(result.team).includes(result.user)) {
-                    teamApprovers.get(result.team).push(result.user);
-                  }
-                  core.info(`Updated approval for team ${result.team} by ${result.user}`);
+                  team.approvedAt = new Date(review.submitted_at);
+                  team.approvers = [userLogin];
+                  usedApprovers.add(userLogin);
+                  break; // Move to next team after finding an eligible approver
                 }
               }
             }
-
-            // Update teams with approval times
-            for (const team of orderedTeams) {
-              team.approvedAt = approvalMap.get(team.slug) || null;
-              team.approvers = teamApprovers.get(team.slug) || [];
-            }
-
+ 
             // Check if new approval detected
             let newApprovalDetected = false;
-            if (context.eventName === 'pull_request_review' && 
-                context.payload.action === 'submitted' && 
+            if (context.eventName === 'pull_request_review' &&
+                context.payload.action === 'submitted' &&
                 context.payload.review?.state === 'APPROVED') {
               newApprovalDetected = true;
               core.info(`🎯 New approval detected from ${context.payload.review.user.login}`);
             }
-
+ 
             // Validate approval order
             let lastApprovalTime = null;
             let failureReason = null;
             let nextTeam = null;
             let allTeamsApproved = true;
-
+            let outOfOrderDetected = false;
+ 
             for (const team of orderedTeams) {
               if (!team.approvedAt) {
                 nextTeam = team;
@@ -534,24 +508,84 @@ jobs:
                 }
                 break;
               }
-              
+             
               if (lastApprovalTime && team.approvedAt < lastApprovalTime) {
+                outOfOrderDetected = true;
                 failureReason = `❌ @${owner}/${team.slug} (${team.name}) approved BEFORE required previous team. Teams must approve in order.`;
                 allTeamsApproved = false;
                 break;
               }
-              
+             
               lastApprovalTime = team.approvedAt;
             }
-
+ 
+            // Reset approvals if out of order detected
+            if (outOfOrderDetected) {
+              core.warning('🔄 Out of order approvals detected. Resetting all approvals...');
+             
+              try {
+                // Remove approval/ready/SLA labels
+                const labelPrefixes = ['Pending:', 'SLA Overdue:', 'Ready to Merge'];
+                const issueLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
+                for (const label of issueLabels.data) {
+                  if (labelPrefixes.some(prefix => label.name.startsWith(prefix))) {
+                    try {
+                      await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label.name });
+                    } catch {}
+                  }
+                }
+ 
+                // Remove the status comment if it exists
+                const comments = await github.rest.issues.listComments({ owner, repo, issue_number: prNumber });
+                for (const comment of comments.data) {
+                  if (comment.user?.type === 'Bot' && comment.body?.includes('Sequential Team Approval Status')) {
+                    await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
+                  }
+                }
+ 
+                // Dismiss all APPROVED reviews on the current PR
+                const reviews = await github.rest.pulls.listReviews({ owner, repo, pull_number: prNumber });
+                for (const review of reviews.data) {
+                  if (review.state === 'APPROVED') {
+                    try {
+                      await github.rest.pulls.dismissReview({
+                        owner,
+                        repo,
+                        pull_number: prNumber,
+                        review_id: review.id,
+                        message: '🔃 Approval reset due to out of order approval sequence.'
+                      });
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }
+                }
+ 
+                // Notify PR participants
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: '⚠️ Out of order approvals detected. All prior approvals have been reset. Approval workflow will start from the first team.'
+                });
+ 
+                core.info('✅ All approvals have been reset due to out of order sequence');
+                failureReason = null; // Clear the failure reason since we've reset
+                allTeamsApproved = false;
+                nextTeam = orderedTeams[0]; // Reset to first team
+              } catch (error) {
+                core.error(`Failed to reset approvals: ${error.message}`);
+              }
+            }
+ 
             // Check SLA if enabled
             let slaViolation = null;
             let reminderNeeded = false;
-            
+           
             if (config.options.enableSLATracking && nextTeam && isScheduledRun) {
               const prCreatedAt = new Date(pr.data.created_at);
               const now = new Date();
-              
+             
               // Find last action time
               let lastActionTime = prCreatedAt;
               for (const team of orderedTeams) {
@@ -561,10 +595,10 @@ jobs:
                   break;
                 }
               }
-              
+             
               const hoursSinceLastAction = (now - lastActionTime) / (1000 * 60 * 60);
               const slaHours = nextTeam.slaHours;
-              
+             
               if (hoursSinceLastAction > slaHours) {
                 slaViolation = {
                   team: nextTeam,
@@ -573,23 +607,23 @@ jobs:
                 };
                 core.warning(`⏰ SLA violation: ${nextTeam.name} is ${slaViolation.hoursOverdue} hours overdue`);
               }
-              
+             
               // Check if reminder needed
               if (config.options.sendReminders) {
                 const reminderInterval = config.options.reminderIntervalHours;
-                if (hoursSinceLastAction > reminderInterval && 
+                if (hoursSinceLastAction > reminderInterval &&
                     hoursSinceLastAction % reminderInterval < 4) {
                   reminderNeeded = true;
                 }
               }
             }
-
+ 
             // Auto-request review
             let reviewRequestMessage = "";
             if (config.options.autoRequestReview && nextTeam && !failureReason?.startsWith('❌')) {
               try {
                 const currentRequestedTeams = pr.data.requested_teams?.map(t => t.slug) || [];
-                
+               
                 if (!currentRequestedTeams.includes(nextTeam.slug)) {
                   await github.rest.pulls.requestReviewers({
                     owner,
@@ -603,23 +637,23 @@ jobs:
                 core.warning(`Failed to request review: ${error.message}`);
               }
             }
-
+ 
             // Update labels
             if (config.options.updateLabels) {
               const targetLabel = nextTeam ? `Pending: ${nextTeam.name}` : 'Ready to Merge';
               const allLabels = orderedTeams.map(t => `Pending: ${t.name}`).concat(['Ready to Merge']);
               const slaLabels = config.teams.map(t => `SLA Overdue: ${t.name}`);
               const allStatusLabels = [...allLabels, ...slaLabels];
-              
+             
               try {
                 const currentLabels = await github.rest.issues.listLabelsOnIssue({
                   owner,
                   repo,
                   issue_number: prNumber
                 });
-                
+               
                 const currentLabelNames = currentLabels.data.map(l => l.name);
-                
+               
                 // Remove outdated labels
                 for (const label of allStatusLabels) {
                   if (label !== targetLabel && currentLabelNames.includes(label)) {
@@ -638,7 +672,7 @@ jobs:
                     }
                   }
                 }
-                
+               
                 // Add current label
                 if (!currentLabelNames.includes(targetLabel)) {
                   await github.rest.issues.addLabels({
@@ -649,7 +683,7 @@ jobs:
                   });
                   core.info(`Added label: "${targetLabel}"`);
                 }
-                
+               
                 // Add SLA violation label if needed
                 if (slaViolation) {
                   const slaLabel = `SLA Overdue: ${slaViolation.team.name}`;
@@ -666,7 +700,7 @@ jobs:
                 core.warning(`Failed to update labels: ${error.message}`);
               }
             }
-
+ 
             // Post comment            
             if (config.options.postComments) {
               const approvalStatus = orderedTeams.map((t, index) => {
@@ -678,9 +712,9 @@ jobs:
                 }
                 return `${detail}\n   - ${t.description}`;
               }).join('\n');
-
+ 
               let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
-              
+             
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
               } else if (allTeamsApproved) {
@@ -688,28 +722,28 @@ jobs:
               } else if (nextTeam) {
                 commentBody += `### ⏳ Next Required Approval\n\n**${nextTeam.name}** (@${owner}/${nextTeam.slug})\n\n${nextTeam.description}`;
               }
-              
+             
               if (reviewRequestMessage) {
                 commentBody += reviewRequestMessage;
               }
-              
+             
               if (newApprovalDetected) {
                 commentBody += `\n\n🔔 _New approval detected from @${context.payload.review.user.login}_`;
               }
-              
+             
               if (slaViolation) {
                 commentBody += `\n\n### ⏰ SLA Alert\n\n`;
                 commentBody += `**${slaViolation.team.name}** is **${slaViolation.hoursOverdue} hours overdue** for approval.\n`;
                 commentBody += `Expected response time: ${slaViolation.slaHours} hours`;
               }
-              
+             
               commentBody += `\n\n---\n<sub>Last checked: ${new Date().toLocaleString()} UTC | [Re-run check](${pr.data.html_url}/checks)</sub>`;
-
+ 
               // Handle comments based on context
               if (isScheduledRun && (reminderNeeded || slaViolation)) {
                 // Post reminder for scheduled runs
                 let reminderBody = `## 🔔 Approval Reminder\n\n`;
-                
+               
                 if (slaViolation) {
                   reminderBody += `### ⏰ SLA Violation Alert\n\n`;
                   reminderBody += `**${slaViolation.team.name}** (@${owner}/${slaViolation.team.slug}) is **${slaViolation.hoursOverdue} hours overdue** for approval.\n`;
@@ -717,10 +751,10 @@ jobs:
                 } else if (reminderNeeded) {
                   reminderBody += `This PR is waiting for approval from **${nextTeam.name}** (@${owner}/${nextTeam.slug}).\n\n`;
                 }
-                
+               
                 reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
                 reminderBody += `---\n<sub>Automated reminder sent at ${new Date().toLocaleString()} UTC</sub>`;
-                
+               
                 try {
                   await github.rest.issues.createComment({
                     owner,
@@ -739,12 +773,12 @@ jobs:
                     repo,
                     issue_number: prNumber,
                   });
-                  
-                  const botComment = comments.data.find(c => 
-                    c.user?.type === 'Bot' && 
+                 
+                  const botComment = comments.data.find(c =>
+                    c.user?.type === 'Bot' &&
                     c.body?.includes('## 🔒 Sequential Team Approval Status')
                   );
-                  
+                 
                   if (botComment) {
                     await github.rest.issues.updateComment({
                       owner,
@@ -765,7 +799,7 @@ jobs:
                 }
               }
             }
-
+ 
             // Create check run
             if (!isScheduledRun && context.eventName !== 'workflow_dispatch') {
               try {
@@ -781,7 +815,7 @@ jobs:
                       ? 'success'
                       : 'neutral',
                   output: {
-                    title: allTeamsApproved ? 'All teams approved ✅' : 
+                    title: allTeamsApproved ? 'All teams approved ✅' :
                             failureReason?.startsWith('❌') ? 'Approval order violation ❌' :
                             `Waiting for ${nextTeam?.name || 'approval'}`,
                     summary: `### Approval Status\n\n${allTeamsApproved ? '✅ All teams approbed!' :
@@ -792,23 +826,23 @@ jobs:
                 core.warning(`Failed to create check run: ${error.message}`);
               }
             }
-
+ 
             // Set workflow status
             if (failureReason?.startsWith('❌')) {
               core.setFailed(failureReason);
             } else {
               core.info('✅ Workflow completed successfully');
             }
-
+ 
       - name: Generate summary
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const eventDetails = context.eventName === 'schedule' ? 'Scheduled Check' : 
+            const eventDetails = context.eventName === 'schedule' ? 'Scheduled Check' :
                                 context.eventName === 'workflow_dispatch' ? 'Manual Run' :
                                 context.eventName;
-            
+           
             await core.summary
               .addHeading('Sequential Approval Check Summary')
               .addTable([
@@ -818,7 +852,8 @@ jobs:
               .write();
 
 
-  check-sequential-approvals:
+
+    check-sequential-approvals:
     needs: [identify-prs]
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.check_all_prs == 'true')
     runs-on: ubi9
@@ -844,7 +879,7 @@ jobs:
             const prNumber = parseInt('${{ matrix.pr_number }}');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-
+ 
             // Remove approval/ready/SLA labels
             const labelPrefixes = ['Pending:', 'SLA Overdue:', 'Ready to Merge'];
             const issueLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
@@ -855,7 +890,7 @@ jobs:
                 } catch {}
               }
             }
-
+ 
             // Remove the status comment if it exists
             const comments = await github.rest.issues.listComments({ owner, repo, issue_number: prNumber });
             for (const comment of comments.data) {
@@ -863,7 +898,7 @@ jobs:
                 await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
               }
             }
-
+ 
             // Notify PR participants
             await github.rest.issues.createComment({
               owner,
@@ -876,7 +911,7 @@ jobs:
         run: |
           echo "No PR number provided, skipping"
           exit 0
-
+ 
       - name: Build configuration from variables
         id: config
         uses: actions/github-script@v7
@@ -885,7 +920,7 @@ jobs:
             // Build teams array from environment variables
             const teams = [];
             const teamCount = parseInt('${{ env.TEAM_COUNT }}');
-            
+           
             for (let i = 1; i <= 5; i++) {
               const slug = process.env[`TEAM_${i}_SLUG`];
               if (slug && i <= teamCount) {
@@ -897,12 +932,12 @@ jobs:
                 });
               }
             }
-            
+           
             if (teams.length === 0) {
               core.setFailed('No teams configured. Please set TEAM_1_SLUG variable at minimum.');
               return;
             }
-            
+           
             // Build configuration object
             const config = {
               teams: teams,
@@ -924,22 +959,22 @@ jobs:
                 overdue: '${{ env.LABEL_COLOR_OVERDUE }}'
               }
             };
-            
+           
             core.info(`Configuration loaded with ${teams.length} teams:`);
             teams.forEach((team, index) => {
               core.info(`  ${index + 1}. ${team.name} (@${team.slug}) - SLA: ${team.slaHours}h`);
             });
-            
+           
             core.setOutput('config', JSON.stringify(config));
             core.setOutput('team_count', teams.length);
-
+ 
       - name: Determine PR number
         id: pr
         uses: actions/github-script@v7
         with:
           script: |
             let prNumber = ${{ matrix.pr_number }};
-            
+           
             if (!prNumber && context.eventName !== 'schedule') {
               if (context.eventName === 'pull_request' || context.eventName === 'pull_request_target') {
                 prNumber = context.payload.pull_request.number;
@@ -949,15 +984,15 @@ jobs:
                 prNumber = context.payload.inputs?.pr_number || null;
               }
             }
-            
+           
             if (!prNumber) {
               core.setFailed('Could not determine PR number from event context');
               return;
             }
-            
+           
             core.setOutput('number', prNumber);
             core.info(`Processing PR #${prNumber}`);
-
+ 
       - name: Ensure labels exist
         if: success()
         uses: actions/github-script@v7
@@ -967,12 +1002,12 @@ jobs:
             const config = JSON.parse('${{ steps.config.outputs.config }}');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            
+           
             if (!config.options.createLabelsIfMissing) {
               core.info('Label creation is disabled');
               return;
             }
-            
+           
             // Define all labels we need
             const requiredLabels = [
               ...config.teams.map(t => ({
@@ -986,7 +1021,7 @@ jobs:
                 color: config.labelColors.ready
               }
             ];
-            
+           
             // Add SLA labels if enabled
             if (config.options.enableSLATracking) {
               config.teams.forEach(t => {
@@ -997,7 +1032,7 @@ jobs:
                 });
               });
             }
-            
+           
             // Get existing labels
             let existingLabels = [];
             try {
@@ -1010,7 +1045,7 @@ jobs:
             } catch (error) {
               core.warning(`Failed to fetch existing labels: ${error.message}`);
             }
-            
+           
             // Create missing labels
             let createdCount = 0;
             for (const label of requiredLabels) {
@@ -1034,11 +1069,11 @@ jobs:
                 }
               }
             }
-            
+           
             if (createdCount > 0) {
               core.info(`Created ${createdCount} new labels`);
             }
-
+ 
       - name: Validate sequential team approvals
         if: success()
         uses: actions/github-script@v7
@@ -1050,10 +1085,10 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const isScheduledRun = context.eventName === 'schedule';
-
+ 
             // Helper functions
             const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-            
+           
             const retryWithBackoff = async (fn, maxRetries = 3, initialDelay = 1000) => {
               for (let i = 0; i < maxRetries; i++) {
                 try {
@@ -1066,10 +1101,10 @@ jobs:
                 }
               }
             };
-
+ 
             const checkTeamMembership = async (username, teamSlug) => {
               try {
-                const response = await retryWithBackoff(async () => 
+                const response = await retryWithBackoff(async () =>
                   github.rest.teams.getMembershipForUserInOrg({
                     org: owner,
                     team_slug: teamSlug,
@@ -1085,11 +1120,11 @@ jobs:
                 return false;
               }
             };
-
+ 
             // Main logic
             const orderedTeams = config.teams.map(t => ({ ...t, approvedAt: null, approvers: [] }));
             core.info(`Checking PR #${prNumber} against ${orderedTeams.length} required approvals`);
-            
+           
             // Fetch PR details
             let pr;
             try {
@@ -1106,18 +1141,18 @@ jobs:
               core.setFailed(`Failed to fetch PR details: ${error.message}`);
               return;
             }
-
+ 
             // Skip if PR is draft and configured to skip
             if (pr.data.draft && config.options.skipDraftPRs) {
               core.info(`PR #${prNumber} is a draft, skipping approval checks`);
               return;
             }
-
+ 
             // Fetch all reviews
             let allReviews = [];
             let page = 1;
             const perPage = 100;
-            
+           
             try {
               while (true) {
                 const reviewsResponse = await retryWithBackoff(async () =>
@@ -1129,9 +1164,9 @@ jobs:
                     page: page
                   })
                 );
-                
+               
                 allReviews = allReviews.concat(reviewsResponse.data);
-                
+               
                 if (reviewsResponse.data.length < perPage) {
                   break;
                 }
@@ -1141,81 +1176,55 @@ jobs:
               core.setFailed(`Failed to fetch PR reviews: ${error.message}`);
               return;
             }
-
+ 
             core.info(`Found ${allReviews.length} total review(s) on the PR`);
-
+ 
             // Process reviews - get latest from each user
             const userLatestReviews = new Map();
-            
+           
             for (const review of allReviews) {
               const userLogin = review.user.login;
               const reviewTime = new Date(review.submitted_at);
-              
-              if (!userLatestReviews.has(userLogin) || 
+             
+              if (!userLatestReviews.has(userLogin) ||
                   reviewTime > new Date(userLatestReviews.get(userLogin).submitted_at)) {
                 userLatestReviews.set(userLogin, review);
               }
             }
-
+ 
             // Check approvals
-            const approvalMap = new Map();
-            const teamApprovers = new Map();
-            
-            for (const [userLogin, review] of userLatestReviews) {
-              if (review.state !== 'APPROVED') {
-                core.info(`User ${userLogin}'s latest review is ${review.state}, skipping`);
-                continue;
-              }
-              
-              const reviewTime = new Date(review.submitted_at);
-              core.info(`Processing approval from ${userLogin} at ${reviewTime.toISOString()}`);
-              
-              // Check team membership
-              const membershipChecks = orderedTeams.map(async (team) => {
+            const usedApprovers = new Set();
+ 
+            for (const team of orderedTeams) {
+              for (const [userLogin, review] of userLatestReviews) {
+                if (usedApprovers.has(userLogin)) continue;
+                if (review.state !== 'APPROVED') continue;
                 const isMember = await checkTeamMembership(userLogin, team.slug);
                 if (isMember) {
-                  return { team: team.slug, time: reviewTime, user: userLogin };
-                }
-                return null;
-              });
-              
-              const results = await Promise.all(membershipChecks);
-              
-              for (const result of results) {
-                if (result && (!approvalMap.has(result.team) || result.time > approvalMap.get(result.team))) {
-                  approvalMap.set(result.team, result.time);
-                  if (!teamApprovers.has(result.team)) {
-                    teamApprovers.set(result.team, []);
-                  }
-                  if (!teamApprovers.get(result.team).includes(result.user)) {
-                    teamApprovers.get(result.team).push(result.user);
-                  }
-                  core.info(`Updated approval for team ${result.team} by ${result.user}`);
+                  team.approvedAt = new Date(review.submitted_at);
+                  team.approvers = [userLogin];
+                  usedApprovers.add(userLogin);
+                  break; // Move to next team after finding an eligible approver
                 }
               }
             }
-
-            // Update teams with approval times
-            for (const team of orderedTeams) {
-              team.approvedAt = approvalMap.get(team.slug) || null;
-              team.approvers = teamApprovers.get(team.slug) || [];
-            }
-
+ 
             // Check if new approval detected
             let newApprovalDetected = false;
-            if (context.eventName === 'pull_request_review' && 
-                context.payload.action === 'submitted' && 
+            if (context.eventName === 'pull_request_review' &&
+                context.payload.action === 'submitted' &&
                 context.payload.review?.state === 'APPROVED') {
               newApprovalDetected = true;
               core.info(`🎯 New approval detected from ${context.payload.review.user.login}`);
             }
-
+ 
             // Validate approval order
             let lastApprovalTime = null;
             let failureReason = null;
             let nextTeam = null;
             let allTeamsApproved = true;
-
+            let outOfOrderDetected = false;
+ 
             for (const team of orderedTeams) {
               if (!team.approvedAt) {
                 nextTeam = team;
@@ -1225,24 +1234,84 @@ jobs:
                 }
                 break;
               }
-              
+             
               if (lastApprovalTime && team.approvedAt < lastApprovalTime) {
+                outOfOrderDetected = true;
                 failureReason = `❌ @${owner}/${team.slug} (${team.name}) approved BEFORE required previous team. Teams must approve in order.`;
                 allTeamsApproved = false;
                 break;
               }
-              
+             
               lastApprovalTime = team.approvedAt;
             }
-
+ 
+            // Reset approvals if out of order detected
+            if (outOfOrderDetected) {
+              core.warning('🔄 Out of order approvals detected. Resetting all approvals...');
+             
+              try {
+                // Remove approval/ready/SLA labels
+                const labelPrefixes = ['Pending:', 'SLA Overdue:', 'Ready to Merge'];
+                const issueLabels = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
+                for (const label of issueLabels.data) {
+                  if (labelPrefixes.some(prefix => label.name.startsWith(prefix))) {
+                    try {
+                      await github.rest.issues.removeLabel({ owner, repo, issue_number: prNumber, name: label.name });
+                    } catch {}
+                  }
+                }
+ 
+                // Remove the status comment if it exists
+                const comments = await github.rest.issues.listComments({ owner, repo, issue_number: prNumber });
+                for (const comment of comments.data) {
+                  if (comment.user?.type === 'Bot' && comment.body?.includes('Sequential Team Approval Status')) {
+                    await github.rest.issues.deleteComment({ owner, repo, comment_id: comment.id });
+                  }
+                }
+ 
+                // Dismiss all APPROVED reviews on the current PR
+                const reviews = await github.rest.pulls.listReviews({ owner, repo, pull_number: prNumber });
+                for (const review of reviews.data) {
+                  if (review.state === 'APPROVED') {
+                    try {
+                      await github.rest.pulls.dismissReview({
+                        owner,
+                        repo,
+                        pull_number: prNumber,
+                        review_id: review.id,
+                        message: '🔃 Approval reset due to out of order approval sequence.'
+                      });
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }
+                }
+ 
+                // Notify PR participants
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  body: '⚠️ Out of order approvals detected. All prior approvals have been reset. Approval workflow will start from the first team.'
+                });
+ 
+                core.info('✅ All approvals have been reset due to out of order sequence');
+                failureReason = null; // Clear the failure reason since we've reset
+                allTeamsApproved = false;
+                nextTeam = orderedTeams[0]; // Reset to first team
+              } catch (error) {
+                core.error(`Failed to reset approvals: ${error.message}`);
+              }
+            }
+ 
             // Check SLA if enabled
             let slaViolation = null;
             let reminderNeeded = false;
-            
+           
             if (config.options.enableSLATracking && nextTeam && isScheduledRun) {
               const prCreatedAt = new Date(pr.data.created_at);
               const now = new Date();
-              
+             
               // Find last action time
               let lastActionTime = prCreatedAt;
               for (const team of orderedTeams) {
@@ -1252,10 +1321,10 @@ jobs:
                   break;
                 }
               }
-              
+             
               const hoursSinceLastAction = (now - lastActionTime) / (1000 * 60 * 60);
               const slaHours = nextTeam.slaHours;
-              
+             
               if (hoursSinceLastAction > slaHours) {
                 slaViolation = {
                   team: nextTeam,
@@ -1264,23 +1333,23 @@ jobs:
                 };
                 core.warning(`⏰ SLA violation: ${nextTeam.name} is ${slaViolation.hoursOverdue} hours overdue`);
               }
-              
+             
               // Check if reminder needed
               if (config.options.sendReminders) {
                 const reminderInterval = config.options.reminderIntervalHours;
-                if (hoursSinceLastAction > reminderInterval && 
+                if (hoursSinceLastAction > reminderInterval &&
                     hoursSinceLastAction % reminderInterval < 4) {
                   reminderNeeded = true;
                 }
               }
             }
-
+ 
             // Auto-request review
             let reviewRequestMessage = "";
             if (config.options.autoRequestReview && nextTeam && !failureReason?.startsWith('❌')) {
               try {
                 const currentRequestedTeams = pr.data.requested_teams?.map(t => t.slug) || [];
-                
+               
                 if (!currentRequestedTeams.includes(nextTeam.slug)) {
                   await github.rest.pulls.requestReviewers({
                     owner,
@@ -1294,23 +1363,23 @@ jobs:
                 core.warning(`Failed to request review: ${error.message}`);
               }
             }
-
+ 
             // Update labels
             if (config.options.updateLabels) {
               const targetLabel = nextTeam ? `Pending: ${nextTeam.name}` : 'Ready to Merge';
               const allLabels = orderedTeams.map(t => `Pending: ${t.name}`).concat(['Ready to Merge']);
               const slaLabels = config.teams.map(t => `SLA Overdue: ${t.name}`);
               const allStatusLabels = [...allLabels, ...slaLabels];
-              
+             
               try {
                 const currentLabels = await github.rest.issues.listLabelsOnIssue({
                   owner,
                   repo,
                   issue_number: prNumber
                 });
-                
+               
                 const currentLabelNames = currentLabels.data.map(l => l.name);
-                
+               
                 // Remove outdated labels
                 for (const label of allStatusLabels) {
                   if (label !== targetLabel && currentLabelNames.includes(label)) {
@@ -1329,7 +1398,7 @@ jobs:
                     }
                   }
                 }
-                
+               
                 // Add current label
                 if (!currentLabelNames.includes(targetLabel)) {
                   await github.rest.issues.addLabels({
@@ -1340,7 +1409,7 @@ jobs:
                   });
                   core.info(`Added label: "${targetLabel}"`);
                 }
-                
+               
                 // Add SLA violation label if needed
                 if (slaViolation) {
                   const slaLabel = `SLA Overdue: ${slaViolation.team.name}`;
@@ -1357,7 +1426,7 @@ jobs:
                 core.warning(`Failed to update labels: ${error.message}`);
               }
             }
-
+ 
             // Post comment            
             if (config.options.postComments) {
               const approvalStatus = orderedTeams.map((t, index) => {
@@ -1369,9 +1438,9 @@ jobs:
                 }
                 return `${detail}\n   - ${t.description}`;
               }).join('\n');
-
+ 
               let commentBody = `## 🔒 Sequential Team Approval Status\n\n${approvalStatus}\n\n`;
-              
+             
               if (failureReason?.startsWith('❌')) {
                 commentBody += `### ⚠️ Issue Found\n\n${failureReason}\n\n`;
               } else if (allTeamsApproved) {
@@ -1379,28 +1448,28 @@ jobs:
               } else if (nextTeam) {
                 commentBody += `### ⏳ Next Required Approval\n\n**${nextTeam.name}** (@${owner}/${nextTeam.slug})\n\n${nextTeam.description}`;
               }
-              
+             
               if (reviewRequestMessage) {
                 commentBody += reviewRequestMessage;
               }
-              
+             
               if (newApprovalDetected) {
                 commentBody += `\n\n🔔 _New approval detected from @${context.payload.review.user.login}_`;
               }
-              
+             
               if (slaViolation) {
                 commentBody += `\n\n### ⏰ SLA Alert\n\n`;
                 commentBody += `**${slaViolation.team.name}** is **${slaViolation.hoursOverdue} hours overdue** for approval.\n`;
                 commentBody += `Expected response time: ${slaViolation.slaHours} hours`;
               }
-              
+             
               commentBody += `\n\n---\n<sub>Last checked: ${new Date().toLocaleString()} UTC | [Re-run check](${pr.data.html_url}/checks)</sub>`;
-
+ 
               // Handle comments based on context
               if (isScheduledRun && (reminderNeeded || slaViolation)) {
                 // Post reminder for scheduled runs
                 let reminderBody = `## 🔔 Approval Reminder\n\n`;
-                
+               
                 if (slaViolation) {
                   reminderBody += `### ⏰ SLA Violation Alert\n\n`;
                   reminderBody += `**${slaViolation.team.name}** (@${owner}/${slaViolation.team.slug}) is **${slaViolation.hoursOverdue} hours overdue** for approval.\n`;
@@ -1408,10 +1477,10 @@ jobs:
                 } else if (reminderNeeded) {
                   reminderBody += `This PR is waiting for approval from **${nextTeam.name}** (@${owner}/${nextTeam.slug}).\n\n`;
                 }
-                
+               
                 reminderBody += `### Current Approval Status:\n${approvalStatus}\n\n`;
                 reminderBody += `---\n<sub>Automated reminder sent at ${new Date().toLocaleString()} UTC</sub>`;
-                
+               
                 try {
                   await github.rest.issues.createComment({
                     owner,
@@ -1430,12 +1499,12 @@ jobs:
                     repo,
                     issue_number: prNumber,
                   });
-                  
-                  const botComment = comments.data.find(c => 
-                    c.user?.type === 'Bot' && 
+                 
+                  const botComment = comments.data.find(c =>
+                    c.user?.type === 'Bot' &&
                     c.body?.includes('## 🔒 Sequential Team Approval Status')
                   );
-                  
+                 
                   if (botComment) {
                     await github.rest.issues.updateComment({
                       owner,
@@ -1456,7 +1525,7 @@ jobs:
                 }
               }
             }
-
+ 
             // Create check run
             if (!isScheduledRun && context.eventName !== 'workflow_dispatch') {
               try {
@@ -1472,7 +1541,7 @@ jobs:
                       ? 'success'
                       : 'neutral',
                   output: {
-                    title: allTeamsApproved ? 'All teams approved ✅' : 
+                    title: allTeamsApproved ? 'All teams approved ✅' :
                            failureReason?.startsWith('❌') ? 'Approval order violation ❌' :
                            `Waiting for ${nextTeam?.name || 'approval'}`,
                     summary: `### Approval Status\n\n${allTeamsApproved ? '✅ All teams approbed!' :
@@ -1483,23 +1552,23 @@ jobs:
                 core.warning(`Failed to create check run: ${error.message}`);
               }
             }
-
+ 
             // Set workflow status
             if (failureReason?.startsWith('❌')) {
               core.setFailed(failureReason);
             } else {
               core.info('✅ Workflow completed successfully');
             }
-
+ 
       - name: Generate summary
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const eventDetails = context.eventName === 'schedule' ? 'Scheduled Check' : 
+            const eventDetails = context.eventName === 'schedule' ? 'Scheduled Check' :
                                context.eventName === 'workflow_dispatch' ? 'Manual Run' :
                                context.eventName;
-            
+           
             await core.summary
               .addHeading('Sequential Approval Check Summary')
               .addTable([
@@ -1507,7 +1576,7 @@ jobs:
                 ['#${{ steps.pr.outputs.number }}', `${context.repo.owner}/${context.repo.repo}`, context.actor, eventDetails]
               ])
               .write();
-
+ 
   # Summary report for scheduled runs
   generate-summary-report:
     if: github.event_name == 'schedule'
@@ -1521,14 +1590,14 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            
+           
             core.info('Scheduled approval check completed for all open PRs');
-            
+           
             // Get the current time and calculate next run
             const now = new Date();
             const nextRun = new Date(now);
             nextRun.setHours(nextRun.getHours() + 4);
-            
+           
             // Create workflow summary
             await core.summary
               .addHeading('🕐 Scheduled Approval Check Complete')
@@ -1542,5 +1611,5 @@ jobs:
               .addBreak()
               .addRaw(`**Workflow run by:** ${context.actor}`)
               .write();
-            
+           
             core.info(`Summary generated for scheduled run at ${now.toISOString()}`);
