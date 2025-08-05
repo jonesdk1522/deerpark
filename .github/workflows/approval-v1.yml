@@ -355,7 +355,7 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          node -e "$(cat <<'EOF'
+          cat > generate-jwt.js <<'EOF'
           const crypto = require('crypto');
           const { execSync } = require('child_process');
 
@@ -403,7 +403,7 @@ jobs:
 
           console.log(\`::set-output name=token::\${token.token}\`);
           EOF
-          )"
+          node generate-jwt.js
  
       - name: Validate sequential team approvals
         if: success()
@@ -1138,7 +1138,7 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          node -e "$(cat <<'EOF'
+          cat > generate-jwt.js <<'EOF'
           const crypto = require('crypto');
           const { execSync } = require('child_process');
 
@@ -1186,7 +1186,7 @@ jobs:
 
           console.log(\`::set-output name=token::\${token.token}\`);
           EOF
-          )"
+          node generate-jwt.js
  
       - name: Validate sequential team approvals
         if: success()
