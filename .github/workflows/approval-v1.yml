@@ -351,9 +351,10 @@ jobs:
       - name: Generate GitHub App Token
         id: generate_token
         env:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.GITHUB_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
         run: |
           cat > generate-jwt.js <<'EOF'
           const crypto = require('crypto');
@@ -372,36 +373,36 @@ jobs:
             exp: Math.floor(Date.now() / 1000) + 600,
             iss: process.env.APP_ID
           }));
-          const unsignedToken = \`\${header}.\${payload}\`;
+          const unsignedToken = `${header}.${payload}`;
           const signature = base64urlEncode(
             crypto.createSign('RSA-SHA256')
               .update(unsignedToken)
               .sign(process.env.APP_PRIVATE_KEY)
           );
-          const jwt = \`\${unsignedToken}.\${signature}\`;
+          const jwt = `${unsignedToken}.${signature}`;
 
           const owner = process.env.GITHUB_REPOSITORY.split('/')[0];
           const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
           const installationResponse = execSync(
-            \`curl -s -H "Authorization: Bearer \${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/repos/\${owner}/\${repo}/installation\`
+            `curl -s -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/repos/${owner}/${repo}/installation`
           ).toString();
           const installation = JSON.parse(installationResponse);
           if (!installation.id) {
-            console.error(\`Failed to get installation ID: \${installationResponse}\`);
+            console.error(`Failed to get installation ID: ${installationResponse}`);
             process.exit(1);
           }
           const installationId = installation.id;
 
           const tokenResponse = execSync(
-            \`curl -s -X POST -H "Authorization: Bearer \${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/app/installations/\${installationId}/access_tokens\`
+            `curl -s -X POST -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/app/installations/${installationId}/access_tokens`
           ).toString();
           const token = JSON.parse(tokenResponse);
           if (!token.token) {
-            console.error(\`Failed to get token: \${tokenResponse}\`);
+            console.error(`Failed to get token: ${tokenResponse}`);
             process.exit(1);
           }
 
-          console.log(\`::set-output name=token::\${token.token}\`);
+          console.log(`::set-output name=token::${token.token}`);
           EOF
           node generate-jwt.js
  
@@ -1134,9 +1135,10 @@ jobs:
       - name: Generate GitHub App Token
         id: generate_token
         env:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.GITHUB_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
         run: |
           cat > generate-jwt.js <<'EOF'
           const crypto = require('crypto');
@@ -1155,36 +1157,36 @@ jobs:
             exp: Math.floor(Date.now() / 1000) + 600,
             iss: process.env.APP_ID
           }));
-          const unsignedToken = \`\${header}.\${payload}\`;
+          const unsignedToken = `${header}.${payload}`;
           const signature = base64urlEncode(
             crypto.createSign('RSA-SHA256')
               .update(unsignedToken)
               .sign(process.env.APP_PRIVATE_KEY)
           );
-          const jwt = \`\${unsignedToken}.\${signature}\`;
+          const jwt = `${unsignedToken}.${signature}`;
 
           const owner = process.env.GITHUB_REPOSITORY.split('/')[0];
           const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
           const installationResponse = execSync(
-            \`curl -s -H "Authorization: Bearer \${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/repos/\${owner}/\${repo}/installation\`
+            `curl -s -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/repos/${owner}/${repo}/installation`
           ).toString();
           const installation = JSON.parse(installationResponse);
           if (!installation.id) {
-            console.error(\`Failed to get installation ID: \${installationResponse}\`);
+            console.error(`Failed to get installation ID: ${installationResponse}`);
             process.exit(1);
           }
           const installationId = installation.id;
 
           const tokenResponse = execSync(
-            \`curl -s -X POST -H "Authorization: Bearer \${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/app/installations/\${installationId}/access_tokens\`
+            `curl -s -X POST -H "Authorization: Bearer ${jwt}" -H "Accept: application/vnd.github.v3+json" https://github.enterprise.gov/api/v3/app/installations/${installationId}/access_tokens`
           ).toString();
           const token = JSON.parse(tokenResponse);
           if (!token.token) {
-            console.error(\`Failed to get token: \${tokenResponse}\`);
+            console.error(`Failed to get token: ${tokenResponse}`);
             process.exit(1);
           }
 
-          console.log(\`::set-output name=token::\${token.token}\`);
+          console.log(`::set-output name=token::${token.token}`);
           EOF
           node generate-jwt.js
  
