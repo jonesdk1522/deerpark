@@ -351,8 +351,8 @@ jobs:
       - name: Generate GitHub App Token
         id: generate_token
         env:
-          APP_ID: ${{ secrets.GITHUB_APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           node -e "$(cat <<'EOF'
@@ -1134,8 +1134,8 @@ jobs:
       - name: Generate GitHub App Token
         id: generate_token
         env:
-          APP_ID: ${{ secrets.GITHUB_APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           node -e "$(cat <<'EOF'
