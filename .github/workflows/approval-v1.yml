@@ -354,7 +354,6 @@ jobs:
           echo "APP_ID: $APP_ID" | grep -q . || echo "APP_ID not set"
         env:
           APP_ID: ${{ secrets.APP_ID }}
-
       - name: Generate GitHub App Token
         id: generate_token
         uses: actions/github-script@v7
@@ -387,7 +386,10 @@ jobs:
             );
             const jwt = `${unsignedToken}.${signature}`;
 
-            const octokit = new github.getOctokit(jwt, { baseUrl: 'https://github.enterprise.gov/api/v3' });
+            const octokit = new github.Octokit({
+              auth: jwt,
+              baseUrl: 'https://github.enterprise.gov/api/v3'
+            });
             const { data: installation } = await octokit.rest.apps.getRepoInstallation({
               owner: context.repo.owner,
               repo: context.repo.repo
@@ -1140,7 +1142,6 @@ jobs:
           echo "APP_ID: $APP_ID" | grep -q . || echo "APP_ID not set"
         env:
           APP_ID: ${{ secrets.APP_ID }}
-
       - name: Generate GitHub App Token
         id: generate_token
         uses: actions/github-script@v7
@@ -1173,7 +1174,10 @@ jobs:
             );
             const jwt = `${unsignedToken}.${signature}`;
 
-            const octokit = new github.getOctokit(jwt, { baseUrl: 'https://github.enterprise.gov/api/v3' });
+            const octokit = new github.Octokit({
+              auth: jwt,
+              baseUrl: 'https://github.enterprise.gov/api/v3'
+            });
             const { data: installation } = await octokit.rest.apps.getRepoInstallation({
               owner: context.repo.owner,
               repo: context.repo.repo
