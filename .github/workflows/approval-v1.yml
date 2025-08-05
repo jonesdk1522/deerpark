@@ -348,13 +348,65 @@ jobs:
               core.info(`Created ${createdCount} new labels`);
             }
 
+      - name: Debug environment
+        run: |
+          whoami || echo "whoami failed"
+          echo "APP_ID: $APP_ID" | grep -q . || echo "APP_ID not set"
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+
       - name: Generate GitHub App Token
         id: generate_token
+        uses: actions/github-script@v7
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node .github/scripts/generate-jwt.js
+        with:
+          github-token: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const crypto = require('crypto');
+
+            function base64urlEncode(data) {
+              return Buffer.from(data).toString('base64')
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+            }
+
+            const header = base64urlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+            const payload = base64urlEncode(JSON.stringify({
+              iat: Math.floor(Date.now() / 1000) - 60,
+              exp: Math.floor(Date.now() / 1000) + 600,
+              iss: process.env.APP_ID
+            }));
+            const unsignedToken = `${header}.${payload}`;
+            const signature = base64urlEncode(
+              crypto.createSign('RSA-SHA256')
+                .update(unsignedToken)
+                .sign(process.env.APP_PRIVATE_KEY)
+            );
+            const jwt = `${unsignedToken}.${signature}`;
+
+            const octokit = new github.getOctokit(jwt, { baseUrl: 'https://github.enterprise.gov/api/v3' });
+            const { data: installation } = await octokit.rest.apps.getRepoInstallation({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            if (!installation.id) {
+              core.error(`Failed to get installation ID: ${JSON.stringify(installation)}`);
+              process.exit(1);
+            }
+            const installationId = installation.id;
+
+            const { data: tokenResponse } = await octokit.rest.apps.createInstallationAccessToken({
+              installation_id: installationId
+            });
+            if (!tokenResponse.token) {
+              core.error(`Failed to get token: ${JSON.stringify(tokenResponse)}`);
+              process.exit(1);
+            }
+
+            core.setOutput('token', tokenResponse.token);
  
       - name: Validate sequential team approvals
         if: success()
@@ -1082,13 +1134,65 @@ jobs:
               core.info(`Created ${createdCount} new labels`);
             }
 
+      - name: Debug environment
+        run: |
+          whoami || echo "whoami failed"
+          echo "APP_ID: $APP_ID" | grep -q . || echo "APP_ID not set"
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+
       - name: Generate GitHub App Token
         id: generate_token
+        uses: actions/github-script@v7
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: node .github/scripts/generate-jwt.js
+        with:
+          github-token: ${{ secrets.ACTIONS_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const crypto = require('crypto');
+
+            function base64urlEncode(data) {
+              return Buffer.from(data).toString('base64')
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+            }
+
+            const header = base64urlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+            const payload = base64urlEncode(JSON.stringify({
+              iat: Math.floor(Date.now() / 1000) - 60,
+              exp: Math.floor(Date.now() / 1000) + 600,
+              iss: process.env.APP_ID
+            }));
+            const unsignedToken = `${header}.${payload}`;
+            const signature = base64urlEncode(
+              crypto.createSign('RSA-SHA256')
+                .update(unsignedToken)
+                .sign(process.env.APP_PRIVATE_KEY)
+            );
+            const jwt = `${unsignedToken}.${signature}`;
+
+            const octokit = new github.getOctokit(jwt, { baseUrl: 'https://github.enterprise.gov/api/v3' });
+            const { data: installation } = await octokit.rest.apps.getRepoInstallation({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            if (!installation.id) {
+              core.error(`Failed to get installation ID: ${JSON.stringify(installation)}`);
+              process.exit(1);
+            }
+            const installationId = installation.id;
+
+            const { data: tokenResponse } = await octokit.rest.apps.createInstallationAccessToken({
+              installation_id: installationId
+            });
+            if (!tokenResponse.token) {
+              core.error(`Failed to get token: ${JSON.stringify(tokenResponse)}`);
+              process.exit(1);
+            }
+
+            core.setOutput('token', tokenResponse.token);
  
       - name: Validate sequential team approvals
         if: success()
